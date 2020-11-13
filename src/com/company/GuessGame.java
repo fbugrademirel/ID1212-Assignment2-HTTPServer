@@ -5,21 +5,22 @@ import java.util.UUID;
 public class GuessGame {
 
     private final int secret = (int) (Math.random() * 100);
+    private final UUID clientID;
     private int numberOfAttempts = 0;
-    private UUID clientID;
 
     public GuessGame(UUID clientID) {
         this.clientID = clientID;
+        System.out.println(secret);
     }
 
-    public String makeAGuess(int guess) {
+    public Result makeAGuess(int guess) {
         numberOfAttempts++;
         if(guess == secret) {
-            return "Correct!";
+            return Result.CORRECT;
         } else if(guess > secret) {
-            return "Lower!";
+            return Result.LOWER;
         } else {
-            return "Higher!";
+            return Result.HIGHER;
         }
     }
 
