@@ -3,8 +3,6 @@ package com.company;
 import java.io.*;
 import java.net.ServerSocket;
 import java.net.Socket;
-import java.nio.file.Files;
-import java.nio.file.Paths;
 import java.util.StringTokenizer;
 import java.util.TreeMap;
 import java.util.UUID;
@@ -14,78 +12,71 @@ public class Server {
     public static TreeMap <String,GuessGame> gameList = new TreeMap<>();
 
     public static void main(String[] args) {
-
         try {
             ServerSocket ss = new ServerSocket(8080);
-            System.out.println("Server socket created...");
             while (true) {
-                Socket s = ss.accept();
-                BufferedReader request = new BufferedReader(new InputStreamReader(s.getInputStream()));
+                try {
+                    Socket s = ss.accept();
+                    BufferedReader request = new BufferedReader(new InputStreamReader(s.getInputStream()));
+                    HTTPHeader header = new HTTPHeader(request);
+                    String requestType = header.requestType;
+                    System.out.println(header.header);
+                    System.out.println(header.body);
 
-                HTTPHeader header = new HTTPHeader(request);
-                String requestType = header.requestType;
-                System.out.println(gameList);
+                    boolean containsClientId = gameList.containsKey(header.sessionid);
+                    boolean isTextRequest = header.acceptType.equals("text");
 
-                boolean containsClientId = gameList.containsKey(header.clientId) ;
-                boolean isDocument = header.fetchDest.equals("document");
-
-                if(containsClientId && isDocument) {
-                    System.out.println("CONTAINS KEY!!!!!!!!!!!!!!!!!!!!!!");
-                    GuessGame game = gameList.get(header.clientId);
-                    if (requestType.equals("GET")) {
-                        System.out.println("GET REQUESTTTTTTTTTTTT");
-                        sendWelcomeResponse(s,game.getClientID().toString());
-                    } else if (requestType.equals("POST")) {
-                        System.out.println("POST REQUESTTTTTTTTTT");
-                        int answer = Integer.parseInt(header.getAnswer());
-                        Result result = game.makeAGuess(answer);
-                        switch (result){
-                            case CORRECT -> {
-                                sendResultResponse(s,game,Result.CORRECT);
-                                gameList.remove(game.getClientID().toString());
+                    if(containsClientId && isTextRequest) {
+                        GuessGame game = gameList.get(header.sessionid);
+                        if(requestType.equals("GET")) {
+                            if(game.getNumberOfAttempts() == 0) {
+                                sendWelcomeResponse(s,game.getSessionId().toString());
+                            } else {
+                                sendResultResponse(s, game, game.getLastTip());
                             }
-                            case LOWER -> sendResultResponse(s,game,Result.LOWER);
-                            case HIGHER -> sendResultResponse(s,game,Result.HIGHER);
+                        } else if (requestType.equals("POST")) {
+                            int answer = Integer.parseInt(header.getAnswer());
+                            Result result = game.makeAGuess(answer);
+                            switch (result) {
+                                case LOWER -> sendResultResponse(s, game, Result.LOWER);
+                                case HIGHER -> sendResultResponse(s, game, Result.HIGHER);
+                                case CORRECT -> {
+                                    sendResultResponse(s, game, Result.CORRECT);
+                                    gameList.remove(game.getSessionId().toString());
+                                }
+                            }
                         }
+                    } else if (!containsClientId && isTextRequest) {
+                        GuessGame game = new GuessGame(UUID.randomUUID());
+                        String sessionId = game.getSessionId().toString();
+                        gameList.put(sessionId, game);
+                        sendWelcomeResponse(s, sessionId);
                     }
-                } else if (!containsClientId && isDocument) {
-                    GuessGame game = new GuessGame(UUID.randomUUID());
-                    String clientId = game.getClientID().toString();
-                    gameList.put(clientId, game);
-                    sendWelcomeResponse(s, clientId);
+                    s.shutdownOutput();
+                    s.close();
+                } catch (Exception e) {
+                    System.out.println(e.getLocalizedMessage());
                 }
-                s.shutdownOutput();
-                s.close();
             }
         } catch (Exception e) {
             System.out.println(e.getLocalizedMessage());
-            System.out.println(e.getMessage());
-            System.out.println(e.toString());
         }
-    }
-
-    private static String readFile(String path) throws IOException {
-        return Files.readString(Paths.get(path));
     }
 
 /**
  * Responses
  */
-
-
     private static void sendWelcomeResponse(Socket s, String clientId) throws IOException {
         PrintStream response = new PrintStream(s.getOutputStream());
         response.println("HTTP/1.1 200 OK");
-        response.println("Set-Cookie: clientId="+ clientId +"\n");
+        response.println("Set-Cookie: sessionid="+ clientId +"\n");
         response.println(ResponseText.getWelcomeText(clientId));
     }
 
     private static void sendResultResponse(Socket s, GuessGame game, Result result) throws IOException {
-        String clientId = game.getClientID().toString();
         String numberOfAttempts = String.valueOf(game.getNumberOfAttempts());
         PrintStream response = new PrintStream(s.getOutputStream());
-        response.println("HTTP/1.1 200 OK");
-        response.println("Set-Cookie: clientId="+ clientId +"\n");
+        response.println("HTTP/1.1 200 OK\n");
         switch (result) {
             case HIGHER -> {
                 String textHigher = ResponseText.getIncorrectResultText(Result.HIGHER, numberOfAttempts);
@@ -111,9 +102,9 @@ class HTTPHeader {
 
     String header;
     String body;
-    String clientId = "-1";
+    String sessionid = "-1";
     String requestType;
-    String fetchDest;
+    String acceptType;
 
     public HTTPHeader(BufferedReader request) throws IOException {
 
@@ -121,7 +112,8 @@ class HTTPHeader {
         StringBuilder sb1 = new StringBuilder();
 
         String firstLine = request.readLine();
-        StringTokenizer stringTokenizer = new StringTokenizer(firstLine, " ?");
+        System.out.println(firstLine);
+        StringTokenizer stringTokenizer = new StringTokenizer(firstLine, " ");
         this.requestType = stringTokenizer.nextToken();
 
         while ((line = request.readLine()) != null && !line.isEmpty()) {
@@ -142,21 +134,23 @@ class HTTPHeader {
                 }
                 this.body = sb2.toString();
             } else if (s.contains("Cookie")) {
-                String[] split = s.split("=");
-                this.clientId = split[1];
-            } else if (s.contains("Sec-Fetch-Dest")) {
+                String[] split = s.split("sessionid=");
+                this.sessionid = split[1];
+            } else if (s.contains("Accept:")) {
                 String[] split = s.split(": ");
-                this.fetchDest = split[1];
+                String operation = split[1];
+                String[] type = operation.split("/");
+                this.acceptType = type[0];
             }
         }
     }
 
     public String getAnswer() {
-        if(this.body != null) {
+        if(this.body != null && !this.body.equals("answer=")) {
             String[] lineSplit = this.body.split("=");
             return lineSplit[1];
         }
-        return "";
+        return "0";
     }
 }
 
@@ -173,11 +167,11 @@ class ResponseText {
                 "</head>\n" +
                 "<body>\n" +
                 "\n" +
-                "    <h1>Welcome to the Guess Game "+ clientId +"!</h1>\n" +
+                "    <h1>Welcome to the Guess Game Dear "+ clientId +"!</h1>\n" +
                 "    <p>I am thinking of a number between 1 and 100.</p>\n" +
                 "    <form action=\"\" method=\"post\">\n" +
                 "        <label for=\"fname\">What is your guess?</label>\n" +
-                "        <input type=\"text\" id=\"fname\" name=\"answer\"><br><br>\n" +
+                "        <input type=\"number\" id=\"fname\" name=\"answer\"><br><br>\n" +
                 "        <input type=\"submit\" value=\"Submit\">\n" +
                 "    </form>\n" +
                 "\n" +
@@ -185,7 +179,11 @@ class ResponseText {
                 "</html>";
     }
     public static String getIncorrectResultText(Result higherOrLower, String numberOfGuesses) {
-        return "<!DOCTYPE html>\n" +
+
+        String plural = "";
+        if(!numberOfGuesses.equals("1"))
+            plural = "es";
+            return "<!DOCTYPE html>\n" +
                 "<html>\n" +
                 "<head>\n" +
                 "    <title>Guess Game!</title>\n" +
@@ -193,7 +191,7 @@ class ResponseText {
                 "<body>\n" +
                 "\n" +
                 "    <h1>Sorry, your guess is WRONG!!</h1>\n" +
-                "    <p> You have made "+ numberOfGuesses+  "guess(es)." +
+                "    <p> You have made "+ numberOfGuesses+  " guess"+ plural + "." +
                 "    <p>You should guess " + higherOrLower + "</p>\n" +
                 "    <form action=\"\" method=\"post\">\n" +
                 "        <label for=\"fname\">What is your guess?</label>\n" +

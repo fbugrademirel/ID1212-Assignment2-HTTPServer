@@ -5,11 +5,12 @@ import java.util.UUID;
 public class GuessGame {
 
     private final int secret = (int) (Math.random() * 100);
-    private final UUID clientID;
+    private final UUID sessionId;
     private int numberOfAttempts = 0;
+    private Result lastTip;
 
-    public GuessGame(UUID clientID) {
-        this.clientID = clientID;
+    public GuessGame(UUID sessionId) {
+        this.sessionId = sessionId;
         System.out.println(secret);
     }
 
@@ -18,8 +19,10 @@ public class GuessGame {
         if(guess == secret) {
             return Result.CORRECT;
         } else if(guess > secret) {
+            lastTip = Result.LOWER;
             return Result.LOWER;
         } else {
+            lastTip = Result.HIGHER;
             return Result.HIGHER;
         }
     }
@@ -28,7 +31,11 @@ public class GuessGame {
         return numberOfAttempts;
     }
 
-    public UUID getClientID() {
-        return clientID;
+    public UUID getSessionId() {
+        return sessionId;
+    }
+
+    public Result getLastTip() {
+        return lastTip;
     }
 }
