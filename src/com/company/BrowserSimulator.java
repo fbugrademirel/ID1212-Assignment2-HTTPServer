@@ -6,26 +6,35 @@ import java.io.InputStreamReader;
 import java.io.PrintStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
+import java.util.ArrayList;
 
 public class BrowserSimulator {
 
-    public static String sessionId = "1";
+    public static String sessionId = "";
 
     public static void main(String[] args) {
 
         try {
-            URL url = new URL("http://ec2-13-48-129-56.eu-north-1.compute.amazonaws.com:8080/");
+            String address = "http://ec2-13-48-129-56.eu-north-1.compute.amazonaws.com:8080/";
+            String local = "http://127.0.0.1:8080/";
+            URL url = new URL(local);
             String responseFromServer = sendingGetRequest(url);
-            if(responseFromServer.contains("Welcome")) {
-                int randomGuess = (int) (Math.random() * 100);
-              //  sendingPostRequest(url, String.valueOf(randomGuess));
-            } else if(responseFromServer.contains("HIGHER")) {
-
-            } else if(responseFromServer.contains("LOWER")) {
-
-            } else if(responseFromServer.contains("CORRECT")) {
+            GuessMachine machine = new GuessMachine();
+            while(true) {
+                if (responseFromServer.contains("Welcome")) {
+                    String randomGuess = machine.makeAGuess(null);
+                    responseFromServer = sendingPostRequest(url, randomGuess);
+                } else if (responseFromServer.contains("HIGHER")) {
+                    String higherGuess = machine.makeAGuess(Result.HIGHER);
+                    responseFromServer = sendingPostRequest(url, higherGuess);
+                } else if (responseFromServer.contains("LOWER")) {
+                    String lowerGuess = machine.makeAGuess(Result.LOWER);
+                    responseFromServer = sendingPostRequest(url, lowerGuess);
+                } else if (responseFromServer.contains("CORRECT")) {
+                    machine.makeAGuess(Result.CORRECT);
+                    break;
+                }
             }
-
         } catch (IOException e) {
             System.out.println(e.getLocalizedMessage());
         }
@@ -39,15 +48,15 @@ public class BrowserSimulator {
         // By default it is GET request
         con.setRequestMethod("GET");
         con.setRequestProperty("Cookie", "sessionid=" + sessionId);
+        con.setRequestProperty("Accept", "text/html");
 
         int responseCode = con.getResponseCode();
         String cookie = con.getHeaderField("Set-Cookie");
-        System.out.println(cookie);
-//        if(sessionId != null) {
-//            String[] split = cookie.split("=");
-//            sessionId = split[1];
-//        }
-        System.out.println(sessionId);
+        if(cookie != null) {
+            String[] split = cookie.split("=");
+            sessionId = split[1];
+        }
+        System.out.println("SESSION ID: " + sessionId);
         System.out.println("Sending get request : "+ url);
         System.out.println("Response code : "+ responseCode);
 
@@ -60,18 +69,19 @@ public class BrowserSimulator {
 
         HttpURLConnection con = (HttpURLConnection) url.openConnection();
         con.setRequestMethod("POST");
-
+        con.setRequestProperty("Cookie", "sessionid=" + sessionId);
+        con.setRequestProperty("Accept", "text/html");
 
         // Send post request
         con.setDoOutput(true);
         PrintStream printStream = new PrintStream(con.getOutputStream());
-        printStream.println(body);
+        printStream.print("answer=" + body);
         printStream.flush();
         printStream.close();
 
         int responseCode = con.getResponseCode();
         String cookie = con.getHeaderField("Set-Cookie");
-        if(sessionId != null) {
+        if(cookie != null) {
             String[] split = cookie.split("=");
             sessionId = split[1];
         }
@@ -96,6 +106,56 @@ public class BrowserSimulator {
         String response = sb.toString();
         System.out.println(response);
         return response;
+    }
+}
+
+class GuessMachine {
+
+    int guessCounter = 0;
+    Integer lastLowerThan = 100;
+    Integer lastHigherThan = 0;
+    Integer currentGuess = 50;
+
+    public String makeAGuess(Result towards) {
+        if(guessCounter == 0 && towards == null) {
+            guessCounter++;
+            return String.valueOf(currentGuess);
+        } else if(towards == Result.HIGHER) {
+            if(guessCounter == 1) {
+                currentGuess = 75;
+                lastHigherThan = 50;
+                guessCounter++;
+                return String.valueOf(currentGuess);
+            } else if(guessCounter > 1) {
+                lastHigherThan = currentGuess;
+                currentGuess = (lastLowerThan + currentGuess) / 2;
+                guessCounter++;
+                return String.valueOf(currentGuess);
+            }
+        } else if(towards == Result.LOWER) {
+            if(guessCounter == 1) {
+                currentGuess = 25;
+                lastLowerThan = 50;
+                guessCounter++;
+                return String.valueOf(currentGuess);
+            } else if(guessCounter > 1) {
+                lastLowerThan = currentGuess;
+                currentGuess = (lastHigherThan + currentGuess) / 2;
+                guessCounter++;
+                return String.valueOf(currentGuess);
+            }
+        } else if(towards == Result.CORRECT) {
+            reset();
+            return "";
+        }
+        return "";
+    }
+
+    private void reset() {
+        lastLowerThan = 100;
+        lastHigherThan = 0;
+        guessCounter = 0;
+        currentGuess = 50;
     }
 }
 
