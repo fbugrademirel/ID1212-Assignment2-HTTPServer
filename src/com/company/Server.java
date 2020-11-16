@@ -12,10 +12,10 @@ public class Server {
     public static TreeMap <String,GuessGame> gameList = new TreeMap<>();
 
     public static void main(String[] args) throws IOException {
-     //   try {
+        try {
             ServerSocket ss = new ServerSocket(8080);
             while (true) {
-     //           try {
+                try {
                     Socket s = ss.accept();
                     BufferedReader request = new BufferedReader(new InputStreamReader(s.getInputStream()));
                     HTTPHeader header = new HTTPHeader(request);
@@ -54,13 +54,13 @@ public class Server {
                     }
                     s.shutdownOutput();
                     s.close();
-//                } catch (Exception e) {
-//                    System.out.println(e.getLocalizedMessage());
-//                }
+                } catch (Exception e) {
+                    System.out.println(e.getLocalizedMessage());
+                }
             }
-//        } catch (Exception e) {
-//            System.out.println(e.getLocalizedMessage());
-//        }
+        } catch (Exception e) {
+            System.out.println(e.getLocalizedMessage());
+        }
     }
 
 /**
