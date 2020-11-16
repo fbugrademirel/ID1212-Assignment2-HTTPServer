@@ -11,7 +11,7 @@ public class Server {
 
     public static TreeMap <String,GuessGame> gameList = new TreeMap<>();
 
-    public static void main(String[] args) {
+    public static void main(String[] args) throws IOException {
         try {
             ServerSocket ss = new ServerSocket(8080);
             while (true) {
@@ -135,7 +135,9 @@ class HTTPHeader {
                 this.body = sb2.toString();
             } else if (s.contains("Cookie")) {
                 String[] split = s.split("sessionid=");
-                this.sessionid = split[1];
+                if(split.length > 1) {
+                    this.sessionid = split[1];
+                }
             } else if (s.contains("Accept:")) {
                 String[] split = s.split(": ");
                 String operation = split[1];
@@ -224,7 +226,13 @@ class ResponseText {
 }
 
 enum Result {
-    HIGHER,
-    LOWER,
-    CORRECT
+    HIGHER("HIGHER"),
+    LOWER("LOWER"),
+    CORRECT("CORRECT");
+
+    public final String label;
+
+    private Result(String label) {
+        this.label = label;
+    }
 }
