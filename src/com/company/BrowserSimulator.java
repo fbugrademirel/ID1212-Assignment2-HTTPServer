@@ -6,11 +6,12 @@ import java.io.InputStreamReader;
 import java.io.PrintStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
-import java.util.ArrayList;
 
 public class BrowserSimulator {
 
-    public static String sessionId = "";
+    private static String sessionId = "";
+    private static final int numberOfGamesToIterate = 100;
+    private static int totalSuccess = 0;
 
     public static void main(String[] args) {
 
@@ -20,7 +21,7 @@ public class BrowserSimulator {
             URL url = new URL(local);
             String responseFromServer = sendingGetRequest(url);
             GuessMachine machine = new GuessMachine();
-            while(true) {
+            for (int i = 1; i < numberOfGamesToIterate;) {
                 if (responseFromServer.contains("Welcome")) {
                     String randomGuess = machine.makeAGuess(null);
                     responseFromServer = sendingPostRequest(url, randomGuess);
@@ -31,10 +32,13 @@ public class BrowserSimulator {
                     String lowerGuess = machine.makeAGuess(Result.LOWER);
                     responseFromServer = sendingPostRequest(url, lowerGuess);
                 } else if (responseFromServer.contains("CORRECT")) {
-                    machine.makeAGuess(Result.CORRECT);
-                    break;
+                    String finalResult = machine.makeAGuess(Result.CORRECT);
+                    responseFromServer = sendingGetRequest(url);
+                    i++;
+                    totalSuccess = Integer.parseInt(finalResult) + totalSuccess;
                 }
             }
+            System.out.println(totalSuccess/100);
         } catch (IOException e) {
             System.out.println(e.getLocalizedMessage());
         }
@@ -117,45 +121,39 @@ class GuessMachine {
     Integer currentGuess = 50;
 
     public String makeAGuess(Result towards) {
-        if(guessCounter == 0 && towards == null) {
+        if (guessCounter == 0 && towards == null) {
             guessCounter++;
             return String.valueOf(currentGuess);
-        } else if(towards == Result.HIGHER) {
-            if(guessCounter == 1) {
+        } else if (towards == Result.HIGHER) {
+            if (guessCounter == 1) {
                 currentGuess = 75;
                 lastHigherThan = 50;
-                guessCounter++;
-                return String.valueOf(currentGuess);
-            } else if(guessCounter > 1) {
+            } else if (guessCounter > 1) {
                 lastHigherThan = currentGuess;
                 currentGuess = (lastLowerThan + currentGuess) / 2;
-                guessCounter++;
-                return String.valueOf(currentGuess);
             }
-        } else if(towards == Result.LOWER) {
-            if(guessCounter == 1) {
+        } else if (towards == Result.LOWER) {
+            if (guessCounter == 1) {
                 currentGuess = 25;
                 lastLowerThan = 50;
-                guessCounter++;
-                return String.valueOf(currentGuess);
-            } else if(guessCounter > 1) {
+            } else if (guessCounter > 1) {
                 lastLowerThan = currentGuess;
                 currentGuess = (lastHigherThan + currentGuess) / 2;
-                guessCounter++;
-                return String.valueOf(currentGuess);
             }
-        } else if(towards == Result.CORRECT) {
+        } else if (towards == Result.CORRECT) {
+            int finalNumberOfGuesses = guessCounter;
             reset();
-            return "";
+            return String.valueOf(finalNumberOfGuesses);
         }
-        return "";
+        guessCounter++;
+        return String.valueOf(currentGuess);
     }
 
     private void reset() {
+        currentGuess = 50;
         lastLowerThan = 100;
         lastHigherThan = 0;
         guessCounter = 0;
-        currentGuess = 50;
     }
 }
 
